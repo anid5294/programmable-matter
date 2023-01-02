@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta charset="utf-8">
+	<title>Programmable Matter Model</title>
+	<style>
+		body {
+			margin: 0;
+		}
+	</style>
+</head>
+
+<body>
+	<script type="importmap">
+		{
+			"imports": {
+				"three": "https://unpkg.com/three@0.138.3/build/three.module.js"
+			}
+		}
+	</script>
+	<script type="module" src="./js/OrbitControls.js"></script>
+	<script type="module">
+		// Importing three.js and OrbitControls
+		import * as THREE from 'three';
+		import { OrbitControls } from '/node_modules/three/examples/jsm/controls/OrbitControls.js';
+
+		// Variable for API endpoint
+		// Need to provide actual endpoint
+		var apiEndpoint = 'N/A'
+
+		// Setting the scene, camera, and renderer
+		var scene = new THREE.Scene();
+		var camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+		camera.position.set(0, -8, 6)
+		var renderer = new THREE.WebGLRenderer({
+			antialias: true
+		});
+		renderer.setSize(window.innerWidth, window.innerHeight);
+		document.body.appendChild(renderer.domElement);
+
+		// Creating the plane/points and its texture 
+		var geometry = new THREE.PlaneBufferGeometry(7, 7, 5, 5);
+		const grid = new THREE.TextureLoader().load('./assets/silverNWB.jpg');
+
+		const mesh = new THREE.MeshBasicMaterial({
+			map: grid
+		});
+
+		var plane = new THREE.Mesh(geometry, mesh);
+		scene.add(plane);
+
+		var points = new THREE.Points(geometry, new THREE.PointsMaterial({
+			size: 0.00
+		}));
+		scene.add(points);
+
+		const controls = new OrbitControls(camera, renderer.domElement);
+
+		// Variables for raycaster, mouse, plane, normalVector, currentIndex, intersects, planePoint, and dragging
+		var raycaster = new THREE.Raycaster();
+		raycaster.params.Points.threshold = 0.40;
+		var mouse = new THREE.Vector2();
+		var intersects = null;
+		var plane = new THREE.Plane();
+		var normalVector = new THREE.Vector3();
+		var currentIndex = null;
+		var planePoint = new THREE.Vector3();
+		var dragging = false;
+
+		window.addEventListener("mousedown", mouseDown, false);
+		window.addEventListener("mousemove", mouseMove, false);
+		window.addEventListener("mouseup", mouseUp, false);
+
+		// Sets a raycaster to determine the intersection of the mouse with the model when the mouse is clicked
+		function mouseDown(event) {
+			setRaycaster(event);
+			getIndex();
+			dragging = true;
+		}
+
+		// When the mouse moves, if there is a point of intersection with the model and the mouse is clicked,
+		// Orbit Controls are disabled and the the model's points are updated according to how the mouse is dragged
+		function mouseMove(event) {
+			if (dragging && currentIndex !== null) {
+				controls.enabled = false;
+				setRaycaster(event);
+				raycaster.ray.intersectPlane(plane, planePoint);
+				updatePointAndNeighbors();
+				geometry.attributes.position.needsUpdate = true;
+			}
+		}
+
+		// When the mouse is unclicked, Orbit Controls are enabled and the array of the model's coordinates is updated
+		function mouseUp(event) {
+			controls.enabled = true;
+			dragging = false;
+			currentIndex = null;
+			updateCoordinates();
+		}
+
+		// Ensures there is a point of intersection between the mouse and model and sets a plane using the point of intersection as a coplanar point
+		function getIndex() {
+			intersects = raycaster.intersectObject(points);
+			if (intersects.length === 0) {
+				currentIndex = null;
+				return;
+			}
+			currentIndex = intersects[0].index;
+			setPlane(intersects[0].point);
+		}
+
+		// Sets a plane using a normal vector (the camera position to point of intersection) and a coplanar point (the point of intersection with the model)
+		function setPlane(point) {
+			normalVector.subVectors(camera.position, point).normalize();
+			plane.setFromNormalAndCoplanarPoint(normalVector, point);
+		}
+
+		// Sets the raycaster to originate from the camera in the direction of the mouse
+		function setRaycaster(event) {
+			getMouse(event);
+			raycaster.setFromCamera(mouse, camera);
+		}
+
+		// Gets the x and y coordinates of the mouse
+		function getMouse(event) {
+			mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+			mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+		}
+
+		// Prints each of the Z coordinates for the model's rows in six separate arrays 
+		function updateCoordinates() {
+			let pos = geometry.attributes.position.array;
+			var zCoordinates = [];
+			for (var i = 2; i < pos.length; i += 3) {
+				zCoordinates.push(pos[i]);
+			}
+
+			const grid = listToMatrix(zCoordinates, 6);
+			console.log(grid);
+			
+			// When the API is set up and integrated call this
+			// sendData(grid);
+		}
+
+		// Helper function for turning list of z-coordinates into a 6x6 array
+		function listToMatrix(list, elementsPerSubArray) {
+			var matrix = [], i, k;
+
+			for (i = 0, k = -1; i < list.length; i++) {
+				if (i % elementsPerSubArray === 0) {
+					k++;
+					matrix[k] = [];
+				}
+
+				matrix[k].push(list[i]);
+			}
+
+			return matrix;
+		}
+
+		// Sets the Z coordinates of the displaced point and its adjacent points
+		// Corner points move 1/4 the amount of the central point
+		// Adjacent points move 1/3 the amount of the central point
+		function updatePointAndNeighbors() {
+			geometry.attributes.position.setZ(currentIndex, planePoint.z);
+			geometry.attributes.position.setZ(currentIndex - 1, (planePoint.z / 3));
+			geometry.attributes.position.setZ(currentIndex + 1, (planePoint.z / 3));
+			geometry.attributes.position.setZ(currentIndex - 6, (planePoint.z / 3));
+			geometry.attributes.position.setZ(currentIndex + 6, (planePoint.z / 3));
+			geometry.attributes.position.setZ(currentIndex + 5, (planePoint.z / 4));
+			geometry.attributes.position.setZ(currentIndex + 7, (planePoint.z / 4));
+			geometry.attributes.position.setZ(currentIndex - 5, (planePoint.z / 4));
+			geometry.attributes.position.setZ(currentIndex - 7, (planePoint.z / 4));
+		}
+
+		// Renders the model
+		function render() {
+			requestAnimationFrame(render);
+			renderer.render(scene, camera);
+			controls.update();
+		}
+
+		// Makes a post request to the server to send the updated coordinate data
+		function sendData(grid) {
+			var myHeaders = new Headers();
+			myHeaders.append("Content-Type", "application/json");
+
+			var data = JSON.stringify(grid);
+
+			var requestOptions = {
+				method: 'POST',
+				headers: myHeaders,
+				body: data,
+				redirect: 'follow'
+			};
+
+			fetch(apiEndpoint, requestOptions)
+				.then(response => response.text())
+				.then(result => console.log(result))
+				.catch(error => console.log('error', error));
+		}
+
+		render();
+	</script>
+</body>
+
+</html>

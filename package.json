@@ -1,0 +1,16 @@
+{
+  "name": "programmable-matter-model",
+  "version": "1.0.0",
+  "description": "",
+  "main": "model.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@three-ts/orbit-controls": "^1.4.7",
+    "three-orbitcontrols": "^2.110.3"
+  }
+}
