@@ -23,7 +23,7 @@
 	<script type="module">
 		// Importing three.js and OrbitControls
 		import * as THREE from 'three';
-		import { OrbitControls } from '/node_modules/three/examples/jsm/controls/OrbitControls.js';
+		import { OrbitControls } from './node_modules/three/examples/jsm/controls/OrbitControls.js';
 
 		// Variable for API endpoint
 		// Need to provide actual endpoint
@@ -41,7 +41,7 @@
 
 		// Creating the plane/points and its texture 
 		var geometry = new THREE.PlaneBufferGeometry(7, 7, 5, 5);
-		const grid = new THREE.TextureLoader().load('./assets/silverNWB.jpg');
+		const grid = new THREE.TextureLoader().load('assets/silverNWB.jpg');
 
 		const mesh = new THREE.MeshBasicMaterial({
 			map: grid
@@ -51,11 +51,16 @@
 		scene.add(plane);
 
 		var points = new THREE.Points(geometry, new THREE.PointsMaterial({
-			size: 0.00
+			size: 0.00,
+			opacity: 0.00,
+			color: "black"
 		}));
 		scene.add(points);
 
 		const controls = new OrbitControls(camera, renderer.domElement);
+
+		// Sets the maximum value that the model can be dragged to
+		var maxValue = 1;
 
 		// Variables for raycaster, mouse, plane, normalVector, currentIndex, intersects, planePoint, and dragging
 		var raycaster = new THREE.Raycaster();
@@ -67,6 +72,7 @@
 		var currentIndex = null;
 		var planePoint = new THREE.Vector3();
 		var dragging = false;
+		var previousPoint;
 
 		window.addEventListener("mousedown", mouseDown, false);
 		window.addEventListener("mousemove", mouseMove, false);
@@ -76,8 +82,10 @@
 		function mouseDown(event) {
 			setRaycaster(event);
 			getIndex();
+			// previousPoint = geometry.attributes.position.getZ(currentIndex);
 			dragging = true;
 		}
+
 
 		// When the mouse moves, if there is a point of intersection with the model and the mouse is clicked,
 		// Orbit Controls are disabled and the the model's points are updated according to how the mouse is dragged
@@ -128,19 +136,25 @@
 			mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
 		}
 
-		// Prints each of the Z coordinates for the model's rows in six separate arrays 
+		// Prints each of the Z coordinates for the center 4x4 grid in a single array
+		// Coordinates are in order from left to right then top to bottom
 		function updateCoordinates() {
 			let pos = geometry.attributes.position.array;
 			var zCoordinates = [];
 			for (var i = 2; i < pos.length; i += 3) {
 				zCoordinates.push(pos[i]);
 			}
+			var finalCoordinates = [];
+			for (var i = 7; i < zCoordinates.length - 7; i++) {
+				finalCoordinates.push(zCoordinates[i]);
+				if ((i == 10) || (i == 16) || (i == 22)) {
+					i += 2;
+				}
+			}
+			console.log(finalCoordinates);
 
-			const grid = listToMatrix(zCoordinates, 6);
-			console.log(grid);
-			
 			// When the API is set up and integrated call this
-			// sendData(grid);
+			// sendData(finalCoordinates);
 		}
 
 		// Helper function for turning list of z-coordinates into a 6x6 array
@@ -162,16 +176,25 @@
 		// Sets the Z coordinates of the displaced point and its adjacent points
 		// Corner points move 1/4 the amount of the central point
 		// Adjacent points move 1/3 the amount of the central point
+		// Ternary operator is used to make sure the points don't reset every time an adjacent point is changed
 		function updatePointAndNeighbors() {
-			geometry.attributes.position.setZ(currentIndex, planePoint.z);
-			geometry.attributes.position.setZ(currentIndex - 1, (planePoint.z / 3));
-			geometry.attributes.position.setZ(currentIndex + 1, (planePoint.z / 3));
-			geometry.attributes.position.setZ(currentIndex - 6, (planePoint.z / 3));
-			geometry.attributes.position.setZ(currentIndex + 6, (planePoint.z / 3));
-			geometry.attributes.position.setZ(currentIndex + 5, (planePoint.z / 4));
-			geometry.attributes.position.setZ(currentIndex + 7, (planePoint.z / 4));
-			geometry.attributes.position.setZ(currentIndex - 5, (planePoint.z / 4));
-			geometry.attributes.position.setZ(currentIndex - 7, (planePoint.z / 4));
+			if (planePoint.z < maxValue) {
+				geometry.attributes.position.setZ(currentIndex, planePoint.z);
+				geometry.attributes.position.setZ(currentIndex - 1, geometry.attributes.position.getZ(currentIndex - 1) < planePoint.z / 3 ? planePoint.z / 3 : geometry.attributes.position.getZ(currentIndex - 1));
+				geometry.attributes.position.setZ(currentIndex + 1, geometry.attributes.position.getZ(currentIndex + 1) < planePoint.z / 3 ? planePoint.z / 3 : geometry.attributes.position.getZ(currentIndex + 1));
+				geometry.attributes.position.setZ(currentIndex - 6, geometry.attributes.position.getZ(currentIndex - 6) < planePoint.z / 3 ? planePoint.z / 3 : geometry.attributes.position.getZ(currentIndex - 6));
+				geometry.attributes.position.setZ(currentIndex + 6, geometry.attributes.position.getZ(currentIndex + 6) < planePoint.z / 3 ? planePoint.z / 3 : geometry.attributes.position.getZ(currentIndex + 6));
+				geometry.attributes.position.setZ(currentIndex - 5, geometry.attributes.position.getZ(currentIndex - 5) < planePoint.z / 4 ? planePoint.z / 4 : geometry.attributes.position.getZ(currentIndex - 5));
+				geometry.attributes.position.setZ(currentIndex + 5, geometry.attributes.position.getZ(currentIndex + 5) < planePoint.z / 4 ? planePoint.z / 4 : geometry.attributes.position.getZ(currentIndex + 5));
+				geometry.attributes.position.setZ(currentIndex - 7, geometry.attributes.position.getZ(currentIndex - 7) < planePoint.z / 4 ? planePoint.z / 4 : geometry.attributes.position.getZ(currentIndex - 7));
+				geometry.attributes.position.setZ(currentIndex + 7, geometry.attributes.position.getZ(currentIndex + 7) < planePoint.z / 4 ? planePoint.z / 4 : geometry.attributes.position.getZ(currentIndex + 7));
+			}
+			for (var i = 0; i < 36; i++) {
+				geometry.attributes.position.setZ(i, 0);
+				if ((i % 6 == 0) && (i <= 24) && (i >= 6)) {
+					i += 4;
+				}
+			}
 		}
 
 		// Renders the model
